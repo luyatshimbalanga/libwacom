@@ -24,7 +24,7 @@ matrix:
       env: BUILDTYPE="coverity", COVERITY_SCAN_PROJECT_NAME="linuxwacom/libwacom", COVERITY_SCAN_NOTIFICATION_EMAIL="killertofu@gmail.com", COVERITY_SCAN_BUILD_COMMAND_PREPEND="", COVERITY_SCAN_BUILD_COMMAND="make", COVERITY_SCAN_BRANCH_PATTERN=".*", COVERITY_URL="https://scan.coverity.com/scripts/travisci_build_coverity_scan.sh"
 
 before_script:
-  - if [[ -n "$COVERITY_URL" ]]; then curl -fs "$COVERITY_URL" > coverity.sh && sed -i 's/"$status_code" != "201"/"$status_code" -lt 200 -o "$status_code" -ge 300/' coverity.sh && chmod +x coverity.sh; fi
+  - if [[ -n "$COVERITY_URL" ]]; then curl -fs "$COVERITY_URL" > coverity.sh && sed -i 's/"$status_code" != "201"/"$status_code" -lt 200 -o "$status_code" -ge 300/' coverity.sh && sed -i 's!TOOL_URL=.*!TOOL_URL=https://scan.coverity.com/download/cxx/linux64!' coverity.sh && chmod +x coverity.sh; fi
   - ./autogen.sh --disable-silent-rules
 
 script:
