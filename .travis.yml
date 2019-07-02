@@ -29,5 +29,5 @@ before_script:
 
 script:
   - export DO_COVERITY="YES"
-  - if [[ x"$BUILDTYPE" = "xcoverity" && x"$DO_COVERITY" = "xYES" ]]; then bash ./coverity.sh; fi
+  - if [[ x"$BUILDTYPE" = "xcoverity" && x"$DO_COVERITY" = "xYES" ]]; then bash ./coverity.sh; cat cov-int/scm_log.txt || true; fi
   - if [[ x"$BUILDTYPE" != "xcoverity" ]]; then make && make check || (cat **/test-suite.log && false); fi
