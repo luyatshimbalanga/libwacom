@@ -1,5 +1,5 @@
 project('libwacom', 'c',
-	version: '1.9', # change configure.ac as well
+	version: '1.11', # change configure.ac as well
 	license: 'MIT/Expat',
 	default_options: [ 'c_std=gnu99', 'warning_level=2' ],
 	meson_version: '>= 0.50.0')
@@ -117,21 +117,10 @@ install_subdir('data',
 	       install_dir: dir_data,
 	       strip_directory: true,
 	       exclude_files: ['wacom.example',
-			       'check-files-in-git.sh',
-			       'check-svg-exists.sh',
-			       'test_data_files.py',
-			       'Makefile.am',
-			       'Makefile.in',
-			       'layouts/Makefile.am',
-			       'layouts/Makefile.in',
-			       'layouts/README'])
+			       'layouts/README.md'])
 
 test('files-in-git',
-     find_program('data/check-files-in-git.sh'),
-     args: [meson.source_root()],
-     suite: ['all'])
-test('svg-layout-exists',
-     find_program('data/check-svg-exists.sh'),
+     find_program('test/check-files-in-git.sh'),
      args: [meson.source_root()],
      suite: ['all'])
 
@@ -139,9 +128,9 @@ test('svg-layout-exists',
 # pytest-compatible test somewhere, we'll conveniently run that one too.
 pytest = find_program('pytest-3', required: false)
 if pytest.found()
-	test('receiver-id-test', pytest,
+	test('pytests', pytest,
 	     workdir: meson.source_root(),
-	     env: ['LIBWACOM_DATA_DIR=@0@'.format(join_paths(meson.source_root(), 'data'))])
+	     env: ['LIBWACOM_DATA_DIR=@0@'.format(dir_src_data)])
 endif
 
 ############### tools ###########################

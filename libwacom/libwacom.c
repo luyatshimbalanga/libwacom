@@ -329,7 +329,7 @@ libwacom_copy(const WacomDevice *device)
 		libwacom_match_ref(m);
 		g_array_append_val(d->matches, m);
 	}
-	d->match = device->match;
+	d->match = libwacom_match_ref(device->match);
 	if (device->paired)
 		d->paired = libwacom_match_ref(device->paired);
 	d->cls = device->cls;
@@ -363,9 +363,14 @@ libwacom_copy(const WacomDevice *device)
 	return d;
 }
 
+static bool
+match_is_equal(const WacomMatch *a, const WacomMatch *b)
+{
+	return g_str_equal(a->match, b->match);
+}
 
-static int
-compare_matches(const WacomDevice *a, const WacomDevice *b)
+static bool
+matches_are_equal(const WacomDevice *a, const WacomDevice *b)
 {
 	const WacomMatch **ma, **mb, **match_a, **match_b;
 
@@ -375,14 +380,14 @@ compare_matches(const WacomDevice *a, const WacomDevice *b)
 	for (match_a = ma; *match_a; match_a++) {
 		int found = 0;
 		for (match_b = mb; !found && *match_b; match_b++) {
-			if (g_str_equal((*match_a)->match, (*match_b)->match))
+			if (match_is_equal(*match_a, *match_b))
 				found = 1;
 		}
 		if (!found)
-			return 1;
+			return false;
 	}
 
-	return 0;
+	return true;
 }
 
 /* Compare layouts based on file name, stripping the full path */
@@ -482,17 +487,13 @@ libwacom_compare(const WacomDevice *a, const WacomDevice *b, WacomCompareFlags f
 
 	if ((a->paired == NULL && b->paired != NULL) ||
 	    (a->paired != NULL && b->paired == NULL) ||
-	    (a->paired && b->paired && !g_str_equal(a->paired->match, b->paired->match)))
+	    (a->paired && b->paired && !match_is_equal(a->paired, b->paired)))
 		return 1;
 
-	if ((flags & WCOMPARE_MATCHES) && compare_matches(a, b) != 0)
+	if ((flags & WCOMPARE_MATCHES) && !matches_are_equal(a, b))
 		return 1;
-	else {
-		WacomMatch *ma = g_array_index(a->matches, WacomMatch*, a->match),
-			   *mb = g_array_index(b->matches, WacomMatch*, b->match);
-		if (!g_str_equal(ma->match, mb->match))
+	else if (!match_is_equal(a->match, b->match))
 			return 1;
-	}
 
 	return 0;
 }
@@ -554,15 +555,15 @@ libwacom_new_from_path(const WacomDeviceDatabase *db, const char *path, WacomFal
 		match_name = NULL;
 		device = libwacom_new (db, match_name, vendor_id, product_id, bus, error);
 	}
-	if (device != NULL)
-		ret = libwacom_copy(device);
-	else if (fallback == WFALLBACK_NONE)
-		goto bail;
 
-	if (device == NULL && fallback == WFALLBACK_GENERIC) {
+	if (device == NULL) {
+		if (fallback == WFALLBACK_NONE)
+			goto out;
+
+		/* WFALLBACK_GENERIC */
 		device = libwacom_get_device(db, "generic");
 		if (device == NULL)
-			goto bail;
+			goto out;
 
 		ret = libwacom_copy(device);
 
@@ -570,27 +571,24 @@ libwacom_new_from_path(const WacomDeviceDatabase *db, const char *path, WacomFal
 			g_free (ret->name);
 			ret->name = g_strdup(name);
 		}
+	} else {
+		ret = libwacom_copy(device);
 	}
 
 	/* for multiple-match devices, set to the one we requested */
 	match = libwacom_match_new(match_name, bus, vendor_id, product_id);
-	libwacom_add_match(ret, match);
+	libwacom_set_default_match(ret, match);
 	libwacom_match_unref(match);
 
-	if (device) {
-		/* if unset, use the kernel flags. Could be unset as well. */
-		if (ret->integration_flags == WACOM_DEVICE_INTEGRATED_UNSET)
-			ret->integration_flags = integration_flags;
+	/* if unset, use the kernel flags. Could be unset as well. */
+	if (device && ret->integration_flags == WACOM_DEVICE_INTEGRATED_UNSET)
+		ret->integration_flags = integration_flags;
 
-		g_free (name);
-
-		return ret;
-	}
-
-bail:
+out:
 	g_free (name);
-	libwacom_error_set(error, WERROR_UNKNOWN_MODEL, NULL);
-	return NULL;
+	if (ret == NULL)
+		libwacom_error_set(error, WERROR_UNKNOWN_MODEL, NULL);
+	return ret;
 }
 
 LIBWACOM_EXPORT WacomDevice*
@@ -898,6 +896,7 @@ libwacom_unref(WacomDevice *device)
 	for (guint i = 0; i < device->matches->len; i++)
 		libwacom_match_unref(g_array_index(device->matches, WacomMatch*, i));
 	g_array_free (device->matches, TRUE);
+	libwacom_match_unref(device->match);
 	g_array_free (device->styli, TRUE);
 	g_array_free (device->status_leds, TRUE);
 	if (device->buttons)
@@ -923,7 +922,8 @@ libwacom_match_ref(WacomMatch *match)
 WacomMatch*
 libwacom_match_unref(WacomMatch *match)
 {
-	if (!g_atomic_int_dec_and_test(&match->refcnt))
+	if (match == NULL ||
+	    !g_atomic_int_dec_and_test(&match->refcnt))
 		return NULL;
 
 	g_free (match->match);
@@ -963,7 +963,6 @@ libwacom_add_match(WacomDevice *device, WacomMatch *newmatch)
 		const char *matchstr = libwacom_match_get_match_string(m);
 
 		if (g_str_equal(matchstr, newmatch->match)) {
-			device->match = i;
 			return;
 		}
 	}
@@ -972,12 +971,39 @@ libwacom_add_match(WacomDevice *device, WacomMatch *newmatch)
 }
 
 void
+libwacom_set_default_match(WacomDevice *device, WacomMatch *newmatch)
+{
+	for (guint i = 0; i < device->matches->len; i++) {
+		WacomMatch *m = g_array_index(device->matches, WacomMatch *, i);
+
+		if (match_is_equal(m, newmatch)) {
+			libwacom_match_unref(device->match);
+			device->match = libwacom_match_ref(m);
+			return;
+		}
+	}
+	g_return_if_reached();
+}
+
+void
 libwacom_remove_match(WacomDevice *device, WacomMatch *to_remove)
 {
 	for (guint i= 0; i < device->matches->len; i++) {
 		WacomMatch *m = g_array_index(device->matches, WacomMatch*, i);
-		if (g_str_equal(m->match, to_remove->match)) {
+		if (match_is_equal(m, to_remove)) {
+			WacomMatch *dflt = device->match;
+
+			/* remove from list */
 			g_array_remove_index(device->matches, i);
+
+			/* now reset the default match if needed */
+			if (match_is_equal(dflt, to_remove)) {
+				WacomMatch *first = g_array_index(device->matches,
+							      WacomMatch*,
+							      0);
+				libwacom_set_default_match(device, first);
+			}
+
 			libwacom_match_unref(to_remove);
 			break;
 		}
@@ -987,8 +1013,8 @@ libwacom_remove_match(WacomDevice *device, WacomMatch *to_remove)
 LIBWACOM_EXPORT int
 libwacom_get_vendor_id(const WacomDevice *device)
 {
-	g_return_val_if_fail(device->match < device->matches->len, -1);
-	return g_array_index(device->matches, WacomMatch*, device->match)->vendor_id;
+	g_return_val_if_fail(device->match, -1);
+	return device->match->vendor_id;
 }
 
 LIBWACOM_EXPORT const char*
@@ -1012,15 +1038,15 @@ libwacom_get_layout_filename(const WacomDevice *device)
 LIBWACOM_EXPORT int
 libwacom_get_product_id(const WacomDevice *device)
 {
-	g_return_val_if_fail(device->match < device->matches->len, -1);
-	return g_array_index(device->matches, WacomMatch*, device->match)->product_id;
+	g_return_val_if_fail(device->match, -1);
+	return device->match->product_id;
 }
 
 LIBWACOM_EXPORT const char*
 libwacom_get_match(const WacomDevice *device)
 {
-	g_return_val_if_fail(device->match < device->matches->len, NULL);
-	return g_array_index(device->matches, WacomMatch*, device->match)->match;
+	g_return_val_if_fail(device->match, NULL);
+	return device->match->match;
 }
 
 LIBWACOM_EXPORT const WacomMatch**
@@ -1188,8 +1214,8 @@ libwacom_get_integration_flags (const WacomDevice *device)
 LIBWACOM_EXPORT WacomBusType
 libwacom_get_bustype(const WacomDevice *device)
 {
-	g_return_val_if_fail(device->match < device->matches->len, -1);
-	return g_array_index(device->matches, WacomMatch*, device->match)->bus;
+	g_return_val_if_fail(device->match, -1);
+	return device->match->bus;
 }
 
 LIBWACOM_EXPORT WacomButtonFlags

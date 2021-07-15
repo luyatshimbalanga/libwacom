@@ -1,6 +1,6 @@
 # Initialize Autoconf
 AC_PREREQ([2.60])
-AC_INIT([libwacom], [1.9]) # change meson.build as well
+AC_INIT([libwacom], [1.11]) # change meson.build as well
 AC_CONFIG_HEADERS([config.h])
 
 # Initialize Automake
@@ -15,7 +15,7 @@ LIBWACOM_LT_VERSION=8:1:6
 AC_SUBST(LIBWACOM_LT_VERSION)
 
 # Initialize libtool
-AC_PROG_LIBTOOL
+LT_INIT([disable-static])
 
 # Checks for programs.
 AC_PROG_CC
@@ -49,8 +49,6 @@ UDEV_DIR=${udevdir}
 AC_SUBST(UDEV_DIR)
 
 AC_CONFIG_FILES([Makefile
-                 data/Makefile
-                 data/layouts/Makefile
                  doc/Makefile
                  test/Makefile
                  tools/Makefile
