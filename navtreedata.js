@@ -30,7 +30,7 @@ var NAVTREE =
     [ "Database", "index.html#Database", null ],
     [ "Deprecated List", "deprecated.html", null ],
     [ "Bug List", "bug.html", null ],
-    [ "Modules", "modules.html", "modules" ],
+    [ "Topics", "topics.html", "topics" ],
     [ "Files", "files.html", [
       [ "File List", "files.html", "files_dup" ],
       [ "Globals", "globals.html", [
@@ -47,8 +47,7 @@ var NAVTREE =
 
 var NAVTREEINDEX =
 [
-"bug.html",
-"group__styli.html#ga60160e5e8d1c2c8a24a24e803d83a597"
+"bug.html"
 ];
 
 var SYNCONMSG = 'click to disable panel synchronisation';
