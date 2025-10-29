@@ -1,0 +1,19 @@
+# ELAN touchscreen/pen sensor present in the Dell Inspiron 7445 14 2-in-1
+# Features: Touch (Intergrated), Tilt
+#
+# sysinfo.BRJPJZKkp3.tar.gz
+# https://github.com/linuxwacom/wacom-hid-descriptors/issues/532
+#
+
+[Device]
+Name=Dell Inc. Inspiron 14 7445 2-in-1
+ModelName=ELAN3233:00 04F3:42AB
+DeviceMatch=i2c|04f3|42ab;i2c|04f3|42ab Stylus
+Class=ISDV4
+Width=12
+Height=7
+IntegratedIn=Display;System
+
+[Features]
+Stylus=true
+Touch=true
